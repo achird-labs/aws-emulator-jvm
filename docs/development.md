@@ -1,0 +1,74 @@
+# Development
+
+## Layout
+
+```text
+aws-emulator-jvm/
+├── Cargo.toml                 # Rust workspace; aws-emulator git dependencies pinned to one rev
+├── Cargo.lock
+├── crates/emu-core/
+│   ├── src/lib.rs             # Emulator and the C ABI
+│   └── tests/c_abi.rs         # drives the C ABI as a foreign host would
+├── build.sbt                  # cargoBuild feeds -Demu.core.library to the forked test JVM
+├── jvm/src/
+│   ├── main/scala/awsemulator/{EmuCore,EmuHttpClient}.scala
+│   └── test/scala/awsemulator/EmuHttpClientSpec.scala
+└── docs/                      # this site
+```
+
+## Build and test
+
+```sh
+cargo test -p emu-core     # the C ABI, from Rust
+sbt test                   # builds emu-core with cargo, then runs the binding's tests in a forked JVM
+sbt publishLocal           # io.github.achird-labs:aws-emulator-jvm_3, versioned from git
+```
+
+`sbt test` needs `cargo` on the `PATH` and a JDK 22 or later. CI runs both suites on Linux, with clippy at
+`-D warnings` and `-Werror` for Scala.
+
+## Releasing
+
+A release is a tag. The version comes from it, through sbt-dynver; untagged builds are snapshots named after the
+commit.
+
+```sh
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+The `Release` workflow then:
+
+1. builds and tests `emu-core` on Linux x86_64, Linux arm64 and macOS arm64;
+2. runs the binding's tests and publishes the jar to Maven Central with sbt-ci-release, unless that version is
+   already there;
+3. creates the GitHub Release with the three libraries and their `SHA256SUMS`, once the jar and every library exist.
+
+Every job is safe to re-run. To retry a tag, run the workflow by hand with the tag as its input, rather than deleting
+and pushing the tag again. Publishing needs the repository secrets `PGP_SECRET`, `PGP_PASSPHRASE`,
+`SONATYPE_USERNAME` and `SONATYPE_PASSWORD`.
+
+After a release, update the version in the install snippets in `docs/getting-started.md`.
+
+## Updating upstream
+
+1. Change the `rev` on every aws-emulator dependency in `Cargo.toml`. They must all name the same commit.
+2. Build once. Cargo resolves the new commit and rewrites `Cargo.lock`; commit both files together.
+3. Run both suites. Upstream behaviour is what the tests pin, so a failure is either a regression upstream or a test
+   that relied on a detail.
+
+## Adding a service
+
+1. Add the upstream service crate to `[workspace.dependencies]` in `Cargo.toml`, at the same `rev`, and to
+   `crates/emu-core/Cargo.toml`.
+2. Register its `EmulatedService` in `build_router` in `crates/emu-core/src/lib.rs`, over the shared engine.
+3. Add a test through the C ABI to `c_abi.rs`, and one through the SDK to `EmuHttpClientSpec`.
+
+## Docs
+
+The site is MkDocs Material, deployed to GitHub Pages from `main`.
+
+```sh
+pip install -r requirements-docs.txt
+mkdocs serve
+```
