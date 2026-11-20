@@ -32,6 +32,7 @@ lazy val jvm = (project in file("jvm"))
     scalacOptions ++= Seq("-deprecation", "-feature", "-Werror"),
     libraryDependencies ++= Seq(
       "software.amazon.awssdk" % "http-client-spi" % awssdk,
+      "software.amazon.awssdk" % "s3"              % awssdk % Test,
       "dev.zio"               %% "zio-test"        % zio    % Test,
       "dev.zio"               %% "zio-test-sbt"    % zio    % Test
     ),
