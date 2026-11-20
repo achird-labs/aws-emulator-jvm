@@ -22,7 +22,7 @@ Java's HTTP clients. Tests get the emulator with no Docker, no port and no TLS.
 [API](https://achird-labs.github.io/aws-emulator-jvm/api/).
 
 ```scala
-val emulator = EmuCore.open() // the emu-core library named by -Demu.core.library
+val emulator = EmuCore.open() // loads the emu-core library the jar bundles for this platform
 val dynamoDb = DynamoDbAsyncClient
   .builder()
   .httpClient(EmuAsyncHttpClient(emulator))
@@ -37,4 +37,5 @@ cargo test -p emu-core   # the C ABI
 sbt test                 # builds emu-core, then tests the binding in a forked JVM
 ```
 
-Rust stable, JDK 22+, sbt 1.12. Upstream pinned to one commit. Apache 2.0.
+One jar, with the native library for Linux x86_64, Linux arm64 and macOS arm64 inside. JDK 22+. Upstream pinned to
+one commit. Apache 2.0.

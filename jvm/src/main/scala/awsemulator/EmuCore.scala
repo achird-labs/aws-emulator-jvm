@@ -3,7 +3,7 @@ package awsemulator
 import java.lang.foreign.{Arena, FunctionDescriptor, Linker, MemoryLayout, MemorySegment, SymbolLookup, ValueLayout}
 import java.lang.invoke.MethodHandle
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 /** One response from the emulator. Header names are lower case; a repeated header keeps every value. */
@@ -75,16 +75,22 @@ final class EmuCore private (native: EmuCore.Native, emulator: MemorySegment) ex
 
 object EmuCore {
 
-  /** The system property naming the native library [[open]] loads. */
+  /** The system property naming a native library for [[open]] to load instead of the bundled one. */
   val LibraryProperty = "emu.core.library"
 
-  /** A new emulator from the library named by [[LibraryProperty]]. */
+  /** A new emulator from the library named by [[LibraryProperty]] when it is set, and otherwise from the library this
+    * jar bundles for the current platform.
+    */
   def open(): EmuCore =
     open(
-      Paths.get(
-        Option(System.getProperty(LibraryProperty))
-          .getOrElse(throw IllegalStateException(s"set -D$LibraryProperty to the emu-core native library"))
-      )
+      Option(System.getProperty(LibraryProperty))
+        .map(Paths.get(_))
+        .orElse(Bundled.library)
+        .getOrElse(
+          throw IllegalStateException(
+            s"this jar bundles no emu-core library for ${Bundled.platform}; set -D$LibraryProperty to one built for it"
+          )
+        )
     )
 
   /** A new emulator from the native library at `library`. */
@@ -93,6 +99,56 @@ object EmuCore {
     val emulator = native.create.invokeWithArguments().asInstanceOf[MemorySegment]
     if (emulator == MemorySegment.NULL) throw IllegalStateException("the emulator could not start")
     EmuCore(native, emulator)
+  }
+
+  /** The emu-core libraries a released jar carries, one per platform, at `awsemulator/native/<os>-<arch>/`. */
+  private[awsemulator] object Bundled {
+
+    /** The current platform as releases name it: `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, … */
+    val platform: String = {
+      val os = System.getProperty("os.name").toLowerCase match {
+        case name if name.startsWith("linux")   => "linux"
+        case name if name.startsWith("mac")     => "macos"
+        case name if name.startsWith("windows") => "windows"
+        case name                               => name.replace(' ', '-')
+      }
+      val arch = System.getProperty("os.arch") match {
+        case "amd64" | "x86_64"  => "x86_64"
+        case "aarch64" | "arm64" => "aarch64"
+        case other               => other
+      }
+      s"$os-$arch"
+    }
+
+    def resource(platform: String): String = s"awsemulator/native/$platform/${System.mapLibraryName("emu_core")}"
+
+    private var extracted: Option[Option[Path]] = None
+
+    /** This platform's bundled library, or `None` when the jar carries none for it. It is extracted on the first call
+      * and reused after; a call that fails to extract it throws, and the next call tries again.
+      */
+    def library: Option[Path] = synchronized {
+      extracted.getOrElse {
+        val found = extract(classOf[EmuCore].getClassLoader, resource(platform))
+        extracted = Some(found)
+        found
+      }
+    }
+
+    /** Copies `resource` to a new temporary directory, both deleted when the JVM exits. A native library is loaded
+      * from a file, never from inside a jar.
+      */
+    def extract(loader: ClassLoader, resource: String): Option[Path] =
+      Option(loader.getResourceAsStream(resource)).map { in =>
+        try {
+          val directory = Files.createTempDirectory("emu-core")
+          val file      = directory.resolve(System.mapLibraryName("emu_core"))
+          directory.toFile.deleteOnExit() // registered first, so deleted after the file inside it
+          file.toFile.deleteOnExit()
+          Files.copy(in, file)
+          file
+        } finally in.close()
+      }
   }
 
   /** `struct EmuResponse { uint16_t status; uint8_t *headers; size_t headers_len; uint8_t *body; size_t body_len; }` */

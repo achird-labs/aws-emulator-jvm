@@ -30,6 +30,9 @@ lazy val jvm = (project in file("jvm"))
   .settings(
     name := "aws-emulator-jvm",
     scalacOptions ++= Seq("-deprecation", "-feature", "-Werror"),
+    // A release stages each platform's emu-core under natives/awsemulator/native/<os>-<arch>/, and the jar carries
+    // them all; EmuCore.open() extracts the one for the platform it runs on.
+    Compile / unmanagedResourceDirectories += (ThisBuild / baseDirectory).value / "natives",
     libraryDependencies ++= Seq(
       "software.amazon.awssdk" % "http-client-spi" % awssdk,
       "software.amazon.awssdk" % "dynamodb"        % awssdk % Test,

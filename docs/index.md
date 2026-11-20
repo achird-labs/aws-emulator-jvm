@@ -37,7 +37,7 @@ import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCrede
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 
-val emulator = EmuCore.open() // the native library named by -Demu.core.library
+val emulator = EmuCore.open() // the native library the jar bundles for this platform
 val s3 = S3Client
   .builder()
   .httpClient(EmuHttpClient(emulator))

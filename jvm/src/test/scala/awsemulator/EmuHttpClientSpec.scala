@@ -1,7 +1,8 @@
 package awsemulator
 
-import java.net.URI
+import java.net.{URI, URLClassLoader}
 import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.{Files, Paths}
 
 import scala.jdk.CollectionConverters.*
 
@@ -149,6 +150,36 @@ object EmuHttpClientSpec extends ZIOSpecDefault {
         emu    <- ZIO.service[EmuCore]
         failed <- ZIO.attempt(emu.dispatch("GET", "/", Seq("x-evil" -> "a\r\nx-injected: b"), Array.emptyByteArray)).flip
       } yield assertTrue(failed.isInstanceOf[IllegalArgumentException])
+    },
+    test("a library bundled for this platform is extracted and serves requests") {
+      ZIO.scoped {
+        for {
+          jar <- ZIO.attempt {
+                   // A class path laid out like a released jar, holding the library the build just compiled
+                   val root  = Files.createTempDirectory("emu-jar")
+                   val entry = root.resolve(EmuCore.Bundled.resource(EmuCore.Bundled.platform))
+                   Files.createDirectories(entry.getParent)
+                   Files.copy(Paths.get(java.lang.System.getProperty(EmuCore.LibraryProperty)), entry)
+                   URLClassLoader(Array(root.toUri.toURL), null)
+                 }
+          library <- ZIO.attempt(EmuCore.Bundled.extract(jar, EmuCore.Bundled.resource(EmuCore.Bundled.platform)))
+          emu     <- ZIO.fromAutoCloseable(ZIO.attempt(EmuCore.open(library.get)))
+          kms <- ZIO.fromAutoCloseable(ZIO.attempt {
+                   KmsAsyncClient
+                     .builder()
+                     .httpClient(EmuAsyncHttpClient(emu))
+                     .endpointOverride(endpoint)
+                     .region(Region.US_EAST_1)
+                     .credentialsProvider(credentials)
+                     .build()
+                 })
+          keys <- ZIO.fromCompletableFuture(kms.listKeys()).map(_.keys().asScala.toList)
+        } yield assertTrue(library.exists(Files.isRegularFile(_)), keys.isEmpty)
+      }
+    },
+    test("a platform the jar bundles no library for is reported as such") {
+      val empty = URLClassLoader(Array(Files.createTempDirectory("emu-jar").toUri.toURL), null)
+      assertTrue(EmuCore.Bundled.extract(empty, EmuCore.Bundled.resource("plan9-mips")).isEmpty)
     },
     test("response headers keep every value of a repeated header") {
       val parsed = EmuCore.parseHeaders("ETag: \"1\"\r\nVary: a\r\nvary: b\r\n")

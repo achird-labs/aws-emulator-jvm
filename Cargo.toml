@@ -24,3 +24,7 @@ service-com-amazonaws-sts-awssecuritytokenservicev20110615 = { git = "https://gi
 bytes = "1"
 http = "1"
 tokio = { version = "1", features = ["rt-multi-thread"] }
+
+# The released library is bundled in the jar for every platform: strip it, so the jar carries code, not symbols.
+[profile.release]
+strip = true

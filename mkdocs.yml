@@ -76,5 +76,6 @@ nav:
           - 0003 Pin upstream by commit: decisions/0003-pinned-upstream.md
           - 0004 Own threads for async calls: decisions/0004-async-threads.md
           - 0005 Close waits, then refuses: decisions/0005-close-semantics.md
+          - 0006 Bundle the libraries: decisions/0006-bundled-natives.md
   - API reference: https://achird-labs.github.io/aws-emulator-jvm/api/
   - Development: development.md

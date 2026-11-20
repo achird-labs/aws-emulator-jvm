@@ -1,12 +1,10 @@
 # Getting started
 
-aws-emulator-jvm ships as two artifacts: the `aws-emulator-jvm` jar on Maven Central, and the `emu-core` native
-library, attached for each platform to every
-[GitHub Release](https://github.com/achird-labs/aws-emulator-jvm/releases). The jar does not bundle the library: you
-fetch it once and point the test JVM at it.
+aws-emulator-jvm is one jar on Maven Central. It bundles the `emu-core` native library for each supported platform,
+and `EmuCore.open()` loads the one for the platform it runs on. There is nothing else to install.
 
 !!! note "Before the first release"
-    Until a `v*` tag has been released, build both from source as described [below](#from-source).
+    Until a `v*` tag has been released, build from source as described [below](#from-source).
 
 ## 1. Add the dependency
 
@@ -17,44 +15,43 @@ libraryDependencies += "io.github.achird-labs" %% "aws-emulator-jvm" % "0.1.0" %
 Add the SDK modules you use (`dynamodb`, `s3`, `kms`, …) as usual. The binding itself depends only on
 `http-client-spi`. It needs JDK 22 or later, where the foreign function API is final.
 
-## 2. Fetch the native library
+The jar bundles libraries for these platforms:
 
-Download the library for your platform from the release that matches the jar's version, and check it against the
-release's `SHA256SUMS`:
-
-| Platform | Release asset |
+| Platform | Bundled as |
 |---|---|
-| Linux x86_64, glibc 2.35+ | `libemu_core-linux-x86_64.so` |
-| Linux arm64, glibc 2.35+ | `libemu_core-linux-aarch64.so` |
-| macOS arm64 | `libemu_core-macos-aarch64.dylib` |
+| Linux x86_64, glibc 2.35+ | `awsemulator/native/linux-x86_64/libemu_core.so` |
+| Linux arm64, glibc 2.35+ | `awsemulator/native/linux-aarch64/libemu_core.so` |
+| macOS arm64 | `awsemulator/native/macos-aarch64/libemu_core.dylib` |
 
-```sh
-VERSION=0.1.0 ASSET=libemu_core-linux-x86_64.so
-BASE="https://github.com/achird-labs/aws-emulator-jvm/releases/download/v$VERSION"
-curl -fsSLO "$BASE/$ASSET"
-curl -fsSL "$BASE/SHA256SUMS" | grep " $ASSET\$" | sha256sum -c -
-export EMU_CORE_LIBRARY="$PWD/$ASSET"
-```
+`EmuCore.open()` copies the library to a temporary file once per JVM, because the operating system loads libraries
+from files, not from inside a jar, and deletes it when the JVM exits. On any other platform it fails with a message
+naming the platform; build the library [from source](#from-source) and point at it.
 
-Other platforms build the library [from source](#from-source).
+## 2. Allow native access
 
-## 3. Point the test JVM at the library
-
-The binding needs two JVM options: the library's path, and permission to call native code.
+Fork the test JVM and let it call native code:
 
 ```scala
 Test / fork := true
-Test / javaOptions ++= Seq(
-  "--enable-native-access=ALL-UNNAMED",
-  s"-Demu.core.library=${sys.env("EMU_CORE_LIBRARY")}"
-)
+Test / javaOptions += "--enable-native-access=ALL-UNNAMED"
 ```
 
 Without `--enable-native-access` the JDK prints a warning when the library is first linked, and
 [JEP 472](https://openjdk.org/jeps/472) plans to make that an error.
-If you would rather not use the system property, pass the path directly: `EmuCore.open(Path.of(...))`.
 
-## 4. Build a client
+### Using a library of your own
+
+To load a library other than the bundled one, built from source or for another platform, name it in the system
+property `emu.core.library`, which takes precedence, or pass its path to `EmuCore.open(path)`:
+
+```scala
+Test / javaOptions += s"-Demu.core.library=${sys.env("EMU_CORE_LIBRARY")}"
+```
+
+Every release also attaches the three libraries, with their `SHA256SUMS`, to its
+[GitHub Release](https://github.com/achird-labs/aws-emulator-jvm/releases), for hosts of the C ABI other than the JVM.
+
+## 3. Build a client
 
 ```scala
 import awsemulator.{EmuAsyncHttpClient, EmuCore}
@@ -108,5 +105,5 @@ cargo build --release -p emu-core   # target/release/libemu_core.so, .dylib or e
 sbt publishLocal                    # prints the snapshot version it publishes
 ```
 
-Depend on the version `publishLocal` printed, and point `EMU_CORE_LIBRARY` at the library in `target/release/`.
-Windows builds are untested.
+Depend on the version `publishLocal` printed. A jar built this way bundles no library, so set `emu.core.library`
+to the one in `target/release/`. Windows builds are untested.
