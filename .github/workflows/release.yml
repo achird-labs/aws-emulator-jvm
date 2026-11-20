@@ -1,0 +1,164 @@
+# Publishes a vX.Y.Z tag: the binding to Maven Central, and emu-core for each supported platform to the tag's
+# GitHub Release. Push a tag to release; `workflow_dispatch` re-runs the whole thing for an existing tag, and every
+# job is safe to re-run: a version already on Maven Central is not published again, and an existing Release only
+# gains missing assets.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing vX.Y.Z tag to release"
+        required: true
+        type: string
+
+# The tag being released: on a dispatch, github.ref_name is the branch the run was launched from.
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -euo pipefail
+          if ! printf '%s' "${TAG}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::'${TAG}' is not a vX.Y.Z tag; refusing to publish."
+            exit 1
+          fi
+          git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/${TAG}" >/dev/null \
+            || { echo "::error::Tag ${TAG} does not exist on origin."; exit 1; }
+
+  # The jar does not bundle the native library, so each release carries one per platform. Linux builds on the
+  # oldest supported runner, so the library loads on any glibc at least that old.
+  natives:
+    name: emu-core · ${{ matrix.asset }}
+    needs: check
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            file: libemu_core.so
+            asset: libemu_core-linux-x86_64.so
+          - runner: ubuntu-22.04-arm
+            file: libemu_core.so
+            asset: libemu_core-linux-aarch64.so
+          - runner: macos-14
+            file: libemu_core.dylib
+            asset: libemu_core-macos-aarch64.dylib
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The C ABI tests run on every platform a library is shipped for, against the release build.
+      - run: cargo test --release -p emu-core --locked
+      - run: cargo build --release -p emu-core --locked
+      - run: cp "target/release/${{ matrix.file }}" "${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish to Maven Central
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      # sbt-dynver reads the version from the checked-out tag, so check out the tag, with its history.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+      # A re-run must not upload again. Anything but a clear 200 or 404 stops the run.
+      - name: Skip if already on Maven Central
+        id: central
+        run: |
+          set -euo pipefail
+          URL="https://repo1.maven.org/maven2/io/github/achird-labs/aws-emulator-jvm_3/${TAG#v}/"
+          CODE="$(curl -sS -o /dev/null -w '%{http_code}' "${URL}" || true)"
+          case "${CODE}" in
+            200) echo "::notice::${TAG#v} is already on Maven Central."; echo "published=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "published=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Could not tell whether ${TAG#v} is on Maven Central (HTTP '${CODE}')."; exit 1 ;;
+          esac
+      # The tests load emu-core, which the build compiles first.
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.central.outputs.published != 'true'
+      - uses: Swatinem/rust-cache@v2
+        if: steps.central.outputs.published != 'true'
+      - uses: actions/setup-java@v5
+        if: steps.central.outputs.published != 'true'
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+        if: steps.central.outputs.published != 'true'
+      - name: Test
+        if: steps.central.outputs.published != 'true'
+        run: sbt test
+      # sbt-ci-release takes the release path only when GITHUB_REF is a tag, which on a dispatch it is not: set it
+      # from the tag. The log checks make sure a run that published nothing never reports success.
+      - name: Publish
+        if: steps.central.outputs.published != 'true'
+        run: |
+          set -euo pipefail
+          export GITHUB_REF="refs/tags/${TAG}"
+          export CI_COMMIT_TAG="${TAG}"
+          LOG="${RUNNER_TEMP}/ci-release.log"
+          sbt ci-release 2>&1 | tee "${LOG}"
+          if grep -q 'doing nothing' "${LOG}" || ! grep -q 'publishing a stable release' "${LOG}"; then
+            echo "::error::ci-release did not publish ${TAG}."
+            exit 1
+          fi
+        env:
+          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+          PGP_SECRET: ${{ secrets.PGP_SECRET }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+
+  # Only after the jar is published and every library built, so a failed release never leaves a Release behind.
+  github-release:
+    name: GitHub Release
+    needs: [natives, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          path: natives
+          merge-multiple: true
+      - name: Checksums
+        working-directory: natives
+        run: sha256sum libemu_core-* > SHA256SUMS && cat SHA256SUMS
+      - name: Create the Release, or add missing assets to it
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" -R "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" -R "${GITHUB_REPOSITORY}" natives/* --clobber
+            exit 0
+          fi
+          case "${TAG}" in
+            *-*) flags="--prerelease" ;;
+            *) flags="--latest" ;;
+          esac
+          gh release create "${TAG}" -R "${GITHUB_REPOSITORY}" --verify-tag --title "${TAG}" --generate-notes \
+            ${flags} natives/*
