@@ -1,0 +1,22 @@
+[package]
+name = "emu-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+engine = { workspace = true }
+emulator-server = { workspace = true }
+smithy-server-runtime = { workspace = true }
+service-com-amazonaws-dynamodb-dynamodb-20120810 = { workspace = true }
+service-com-amazonaws-s3-amazons3 = { workspace = true }
+service-com-amazonaws-kms-trentservice = { workspace = true }
+service-com-amazonaws-iam-awsidentitymanagementv20100508 = { workspace = true }
+service-com-amazonaws-sts-awssecuritytokenservicev20110615 = { workspace = true }
+bytes = { workspace = true }
+http = { workspace = true }
+tokio = { workspace = true }

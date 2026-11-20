@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = ["crates/emu-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/achird-labs/aws-emulator-jvm"
+
+[workspace.dependencies]
+# aws-emulator is consumed as a git dependency pinned to one upstream commit: cargo finds the
+# unpublished crates in the repo by name, and their `workspace = true` keys resolve against
+# the upstream workspace. A local change to upstream goes through `[patch]`, not a fork.
+engine = { package = "aws-emulator-engine", git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+emulator-server = { package = "aws-emulator-server", git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+smithy-server-runtime = { package = "aws-emulator-smithy-server-runtime", git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+service-com-amazonaws-dynamodb-dynamodb-20120810 = { git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+service-com-amazonaws-s3-amazons3 = { git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+service-com-amazonaws-kms-trentservice = { git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+service-com-amazonaws-iam-awsidentitymanagementv20100508 = { git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+service-com-amazonaws-sts-awssecuritytokenservicev20110615 = { git = "https://github.com/aws/aws-emulator", rev = "864dd26a02416cc990250070e65c7b703d06755e" }
+
+bytes = "1"
+http = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
