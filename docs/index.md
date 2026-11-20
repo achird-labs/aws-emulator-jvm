@@ -49,3 +49,6 @@ val s3 = S3Client
 
 s3.createBucket(_.bucket("reports"))
 ```
+
+[Get started](getting-started.md){ .md-button .md-button--primary }
+[How it works](architecture/index.md){ .md-button }

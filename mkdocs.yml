@@ -60,6 +60,10 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Getting started: getting-started.md
+  - Guide:
+      - SDK clients: guide/clients.md
+      - Services and addressing: guide/services.md
   - Architecture:
       - architecture/index.md
       - The C ABI: architecture/c-abi.md
