@@ -1,6 +1,7 @@
 import scala.sys.process.Process
 
 val awssdk = "2.56.0"
+val zio    = "2.1.21"
 
 ThisBuild / organization     := "io.github.achird-labs"
 ThisBuild / organizationName := "Achird Labs"
@@ -30,7 +31,9 @@ lazy val jvm = (project in file("jvm"))
     name := "aws-emulator-jvm",
     scalacOptions ++= Seq("-deprecation", "-feature", "-Werror"),
     libraryDependencies ++= Seq(
-      "software.amazon.awssdk" % "http-client-spi" % awssdk
+      "software.amazon.awssdk" % "http-client-spi" % awssdk,
+      "dev.zio"               %% "zio-test"        % zio    % Test,
+      "dev.zio"               %% "zio-test-sbt"    % zio    % Test
     ),
     cargoBuild := {
       val workspace = (ThisBuild / baseDirectory).value
