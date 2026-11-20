@@ -6,10 +6,12 @@ import java.nio.charset.StandardCharsets.UTF_8
 import scala.jdk.CollectionConverters.*
 
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
+import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.model.*
+import software.amazon.awssdk.services.kms.KmsAsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import zio.*
 import zio.test.*
@@ -105,6 +107,23 @@ object EmuHttpClientSpec extends ZIOSpecDefault {
         _ <- ZIO.attempt(s3.putObject(_.bucket("reports").key("daily/1.json"), RequestBody.fromString("""{"ok":false}""")))
         got <- ZIO.attempt(s3.getObjectAsBytes(_.bucket("reports").key("daily/1.json")).asUtf8String())
       } yield assertTrue(got == """{"ok":false}""")
+    },
+    test("KMS decrypts what it encrypted with a key it created") {
+      for {
+        emu <- ZIO.service[EmuCore]
+        kms <- ZIO.fromAutoCloseable(ZIO.attempt {
+                 KmsAsyncClient
+                   .builder()
+                   .httpClient(EmuAsyncHttpClient(emu))
+                   .endpointOverride(endpoint)
+                   .region(Region.US_EAST_1)
+                   .credentialsProvider(credentials)
+                   .build()
+               })
+        key       <- ZIO.fromCompletableFuture(kms.createKey(_ => ())).map(_.keyMetadata().keyId())
+        encrypted <- ZIO.fromCompletableFuture(kms.encrypt(_.keyId(key).plaintext(SdkBytes.fromUtf8String("hello"))))
+        decrypted <- ZIO.fromCompletableFuture(kms.decrypt(_.ciphertextBlob(encrypted.ciphertextBlob())))
+      } yield assertTrue(decrypted.plaintext().asUtf8String() == "hello")
     },
     test("two emulators share no state") {
       ZIO.scoped {

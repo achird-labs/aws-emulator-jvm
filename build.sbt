@@ -34,6 +34,7 @@ lazy val jvm = (project in file("jvm"))
       "software.amazon.awssdk" % "http-client-spi" % awssdk,
       "software.amazon.awssdk" % "dynamodb"        % awssdk % Test,
       "software.amazon.awssdk" % "s3"              % awssdk % Test,
+      "software.amazon.awssdk" % "kms"             % awssdk % Test,
       "dev.zio"               %% "zio-test"        % zio    % Test,
       "dev.zio"               %% "zio-test-sbt"    % zio    % Test
     ),
