@@ -32,6 +32,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-docs.txt
       - run: pip install -r requirements-docs.txt
+      - name: The committed animations match their scripts
+        run: |
+          python3 scripts/visuals/build.py
+          git diff --exit-code -- docs/assets
       - name: Build the API reference
         run: sbt jvm/doc
       - name: Build the site

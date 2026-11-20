@@ -5,6 +5,8 @@ library, `emu-core`, links DynamoDB, S3 and KMS (with the IAM and STS services K
 byte-level C ABI. A Scala 3 binding loads it with the Java foreign function API and implements the AWS SDK for Java's
 HTTP client interfaces, so an ordinary SDK client talks to the emulator with no container, no port and no TLS.
 
+![An SDK call travels through EmuHttpClient and EmuCore, across the C ABI, to the router and one of DynamoDB, S3 or KMS, and the response comes back in the same call.](assets/request-path.svg)
+
 ## Why
 
 A JVM test that wants a broad AWS emulator today runs a Docker image, trusts its self-signed certificate and finds a
