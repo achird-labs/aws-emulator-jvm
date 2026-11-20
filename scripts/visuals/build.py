@@ -9,6 +9,8 @@ sys.path.insert(0, HERE)
 
 SCENES = {
     "request-path": "request_path",
+    "abi-memory": "abi_memory",
+    "lifecycle": "lifecycle",
 }
 
 if __name__ == "__main__":

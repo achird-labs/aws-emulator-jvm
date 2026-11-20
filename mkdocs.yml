@@ -60,6 +60,10 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Architecture:
+      - architecture/index.md
+      - The C ABI: architecture/c-abi.md
+      - Threads and lifetimes: architecture/concurrency.md
   - Design:
       - Decision records:
           - decisions/README.md
