@@ -5,10 +5,10 @@ val zio    = "2.1.21"
 
 ThisBuild / organization     := "io.github.achird-labs"
 ThisBuild / organizationName := "Achird Labs"
-ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion     := "3.3.7"
 ThisBuild / homepage         := Some(url("https://achird-labs.github.io/aws-emulator-jvm/"))
 ThisBuild / licenses         := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0"))
+ThisBuild / versionScheme    := Some("early-semver")
 ThisBuild / developers := List(
   Developer("EtaCassiopeia", "Mohsen Zainalpour", "zainalpour@gmail.com", url("https://github.com/EtaCassiopeia"))
 )
