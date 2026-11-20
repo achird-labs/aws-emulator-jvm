@@ -199,3 +199,42 @@ fn s3_returns_the_object_it_stored() {
 
     unsafe { emu_free(emulator) };
 }
+
+#[test]
+fn two_emulators_share_no_state() {
+    let first = emu_new();
+    let second = emu_new();
+    let list = |emulator| json("kms", "TrentService.ListKeys", "1.1", "{}", emulator).body;
+
+    json("kms", "TrentService.CreateKey", "1.1", "{}", first);
+    assert!(list(first).contains("KeyId"));
+    assert!(!list(second).contains("KeyId"), "{}", list(second));
+
+    unsafe {
+        emu_free(first);
+        emu_free(second);
+    }
+}
+
+#[test]
+fn a_malformed_request_is_refused_without_touching_out() {
+    let emulator = emu_new();
+    let method = CString::new("POST").unwrap();
+    let uri = CString::new("/").unwrap();
+    let headers = b"no-colon-here\r\n";
+    let mut out = std::mem::MaybeUninit::<EmuResponse>::uninit();
+    let code = unsafe {
+        emu_dispatch(
+            emulator,
+            method.as_ptr(),
+            uri.as_ptr(),
+            headers.as_ptr(),
+            headers.len(),
+            std::ptr::null(),
+            0,
+            out.as_mut_ptr(),
+        )
+    };
+    assert_eq!(code, -1);
+    unsafe { emu_free(emulator) };
+}
