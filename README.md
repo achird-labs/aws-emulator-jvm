@@ -1,10 +1,40 @@
-# aws-emulator-jvm
+<h1 align="center">
+  <img src="docs/assets/logo.svg" width="72" alt=""><br>
+  aws-emulator-jvm
+</h1>
 
-[aws-emulator](https://github.com/aws/aws-emulator) inside the JVM process: DynamoDB, S3 and KMS behind a Rust C ABI,
-bound to the AWS SDK for Java through the foreign function API. No Docker, no ports, no TLS.
+[![CI](https://github.com/achird-labs/aws-emulator-jvm/actions/workflows/ci.yml/badge.svg)](https://github.com/achird-labs/aws-emulator-jvm/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-achird--labs.github.io%2Faws--emulator--jvm-blue)](https://achird-labs.github.io/aws-emulator-jvm/)
 
-```sh
-cargo build -p emu-core
+[aws-emulator](https://github.com/aws/aws-emulator) inside the JVM process. A Rust library links DynamoDB, S3 and KMS
+behind a byte-level C ABI; a Scala 3 binding loads it with the foreign function API and implements the AWS SDK for
+Java's HTTP clients. Tests get the emulator with no Docker, no port and no TLS.
+
+<p align="center">
+  <img src="docs/assets/request-path.svg" width="100%" alt="An SDK call travels through EmuHttpClient and EmuCore, across the C ABI, to the router and one of DynamoDB, S3 or KMS, and the response comes back in the same call.">
+</p>
+
+**[Documentation](https://achird-labs.github.io/aws-emulator-jvm/)**:
+[getting started](https://achird-labs.github.io/aws-emulator-jvm/getting-started/),
+[guide](https://achird-labs.github.io/aws-emulator-jvm/guide/clients/),
+[architecture](https://achird-labs.github.io/aws-emulator-jvm/architecture/),
+[decisions](https://achird-labs.github.io/aws-emulator-jvm/decisions/),
+[API](https://achird-labs.github.io/aws-emulator-jvm/api/).
+
+```scala
+val emulator = EmuCore.open() // the emu-core library named by -Demu.core.library
+val dynamoDb = DynamoDbAsyncClient
+  .builder()
+  .httpClient(EmuAsyncHttpClient(emulator))
+  .endpointOverride(URI.create("http://emulator.invalid"))
+  .region(Region.US_EAST_1)
+  .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
+  .build()
 ```
 
-Apache 2.0.
+```sh
+cargo test -p emu-core   # the C ABI
+sbt test                 # builds emu-core, then tests the binding in a forked JVM
+```
+
+Rust stable, JDK 22+, sbt 1.12. Upstream pinned to one commit. Apache 2.0.
