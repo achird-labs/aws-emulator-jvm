@@ -41,9 +41,9 @@ git push origin v0.1.0
 The `Release` workflow then:
 
 1. builds and tests `emu-core` on Linux x86_64, Linux arm64 and macOS arm64;
-2. runs the binding's tests and publishes the jar to Maven Central with sbt-ci-release, unless that version is
-   already there;
-3. creates the GitHub Release with the three libraries and their `SHA256SUMS`, once the jar and every library exist.
+2. stages the three libraries in `natives/`, runs the binding's tests, checks that the jar bundles all three, and
+   publishes it to Maven Central with sbt-ci-release, unless that version is already there;
+3. creates the GitHub Release with the three libraries and their `SHA256SUMS`, for hosts other than the JVM.
 
 Every job is safe to re-run. To retry a tag, run the workflow by hand with the tag as its input, rather than deleting
 and pushing the tag again. Publishing needs the repository secrets `PGP_SECRET`, `PGP_PASSPHRASE`,
