@@ -1,5 +1,5 @@
-# Publishes a vX.Y.Z tag: the binding to Maven Central, and emu-core for each supported platform to the tag's
-# GitHub Release. Push a tag to release; `workflow_dispatch` re-runs the whole thing for an existing tag, and every
+# Publishes a vX.Y.Z tag: emu-core is built for each supported platform, the binding goes to Maven Central with every
+# library bundled in its jar, and the libraries are also attached to the tag's GitHub Release. Push a tag to release; `workflow_dispatch` re-runs the whole thing for an existing tag, and every
 # job is safe to re-run: a version already on Maven Central is not published again, and an existing Release only
 # gains missing assets.
 name: Release
@@ -39,8 +39,8 @@ jobs:
           git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/${TAG}" >/dev/null \
             || { echo "::error::Tag ${TAG} does not exist on origin."; exit 1; }
 
-  # The jar does not bundle the native library, so each release carries one per platform. Linux builds on the
-  # oldest supported runner, so the library loads on any glibc at least that old.
+  # One library per platform: the jar bundles them all, and the Release attaches them for other hosts of the C ABI.
+  # Linux builds on the oldest supported runner, so the library loads on any glibc at least that old.
   natives:
     name: emu-core · ${{ matrix.asset }}
     needs: check
@@ -76,7 +76,7 @@ jobs:
 
   publish:
     name: Publish to Maven Central
-    needs: check
+    needs: [check, natives]
     runs-on: ubuntu-latest
     steps:
       # sbt-dynver reads the version from the checked-out tag, so check out the tag, with its history.
@@ -84,6 +84,23 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
+      # The jar bundles every platform's library: stage them where the build picks up resources,
+      # natives/awsemulator/native/<os>-<arch>/, under the file name System.mapLibraryName gives on that platform.
+      - uses: actions/download-artifact@v6
+        with:
+          path: staged
+          merge-multiple: true
+      - name: Stage the native libraries
+        run: |
+          set -euo pipefail
+          for asset in staged/libemu_core-*; do
+            rest="${asset##*/libemu_core-}"
+            platform="${rest%.*}"
+            mkdir -p "natives/awsemulator/native/${platform}"
+            cp "${asset}" "natives/awsemulator/native/${platform}/libemu_core.${rest##*.}"
+          done
+          find natives -type f | sort
+          test "$(find natives -type f | wc -l)" -eq 3
       # A re-run must not upload again. Anything but a clear 200 or 404 stops the run.
       - name: Skip if already on Maven Central
         id: central
@@ -112,6 +129,14 @@ jobs:
       - name: Test
         if: steps.central.outputs.published != 'true'
         run: sbt test
+      - name: Check the jar bundles every library
+        if: steps.central.outputs.published != 'true'
+        run: |
+          set -euo pipefail
+          sbt jvm/package
+          jar="$(find jvm/target -name 'aws-emulator-jvm_3-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)"
+          unzip -l "${jar}" | grep 'awsemulator/native/'
+          test "$(unzip -l "${jar}" | grep -c 'awsemulator/native/.*/libemu_core\.')" -eq 3
       # sbt-ci-release takes the release path only when GITHUB_REF is a tag, which on a dispatch it is not: set it
       # from the tag. The log checks make sure a run that published nothing never reports success.
       - name: Publish
