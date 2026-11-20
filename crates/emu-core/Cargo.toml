@@ -20,3 +20,6 @@ service-com-amazonaws-sts-awssecuritytokenservicev20110615 = { workspace = true 
 bytes = { workspace = true }
 http = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1"
