@@ -60,5 +60,13 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Design:
+      - Decision records:
+          - decisions/README.md
+          - 0001 A byte-level C ABI: decisions/0001-c-abi.md
+          - 0002 FFM, not JNI or JNA: decisions/0002-ffm.md
+          - 0003 Pin upstream by commit: decisions/0003-pinned-upstream.md
+          - 0004 Own threads for async calls: decisions/0004-async-threads.md
+          - 0005 Close waits, then refuses: decisions/0005-close-semantics.md
   - API reference: https://achird-labs.github.io/aws-emulator-jvm/api/
   - Development: development.md
